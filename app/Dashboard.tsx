@@ -37,6 +37,7 @@ type Briefing = {
 
 type CalEvent = { summary: string; start: string; end: string; location?: string };
 type EmailItem = { from: string; subject: string; snippet: string; date: string };
+type ChatMsg = { role: "user" | "assistant"; content: string };
 
 type Props = {
   connected: boolean;
@@ -71,7 +72,6 @@ function fromName(s: string): string {
   return name || s;
 }
 
-// --- Habitudes : dates (YYYY-MM-DD), grille et serie en cours ---
 function ymd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -168,6 +168,17 @@ export default function Dashboard(props: Props) {
   const [sending, setSending] = useState(false);
   const [replyNotice, setReplyNotice] = useState<string | null>(null);
 
+  // Chat
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      content:
+        "Salut Dierry ! Demande-moi ce que tu veux : résumer tes mails, voir ton agenda du jour, ou ajouter un objectif ou une habitude.",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+
   const events = props.events ?? [];
   const emails = props.emails ?? [];
 
@@ -244,6 +255,33 @@ export default function Dashboard(props: Props) {
     }
   }
 
+  async function sendChat() {
+    const t = chatInput.trim();
+    if (!t || chatBusy) return;
+    const next: ChatMsg[] = [...chatMsgs, { role: "user", content: t }];
+    setChatMsgs(next);
+    setChatInput("");
+    setChatBusy(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Erreur");
+      setChatMsgs((m) => [...m, { role: "assistant", content: data.reply || "…" }]);
+      if (data.changed) router.refresh();
+    } catch (e) {
+      setChatMsgs((m) => [
+        ...m,
+        { role: "assistant", content: `Erreur : ${e instanceof Error ? e.message : "inconnue"}` },
+      ]);
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   return (
     <div className="halo-root">
       <style>{`
@@ -300,6 +338,11 @@ export default function Dashboard(props: Props) {
         .halo-root .btn-mini{font-family:'Inter',sans-serif;font-weight:600;font-size:12px;color:var(--text);border:1px solid var(--borderS);border-radius:9px;padding:6px 11px;cursor:pointer;background:rgba(255,255,255,.04);transition:all .15s ease;}
         .halo-root .btn-mini:hover:not(:disabled){background:var(--panel2);border-color:rgba(255,255,255,.25);}
         .halo-root .btn-mini:disabled{opacity:.4;cursor:not-allowed;}
+        .halo-root .bubble-h{background:var(--panel2);border:1px solid var(--border);}
+        .halo-root .bubble-u{background:linear-gradient(180deg,rgba(255,111,165,.16),rgba(155,107,255,.16));border:1px solid var(--borderS);}
+        .halo-root .send-btn{background:radial-gradient(circle at 32% 27%,#FFD9AE,#FF6FA5 47%,#9B6BFF 84%);border:none;cursor:pointer;box-shadow:0 3px 14px rgba(255,111,165,.3);transition:transform .15s ease,opacity .15s ease;}
+        .halo-root .send-btn:hover:not(:disabled){transform:translateY(-1px) scale(1.04);}
+        .halo-root .send-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
         @media (prefers-reduced-motion: reduce){.halo-breathe,.halo-glowpulse{animation:none!important;}}
       `}</style>
 
@@ -354,6 +397,88 @@ export default function Dashboard(props: Props) {
         )}
 
         <div className="space-y-5">
+          {/* Chat avec l'agent */}
+          <Card title="Discuter avec l'agent">
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                maxHeight: 320,
+                overflowY: "auto",
+                marginBottom: 12,
+                paddingRight: 4,
+              }}
+            >
+              {chatMsgs.map((msg, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                    maxWidth: "85%",
+                    flexDirection: msg.role === "user" ? "row-reverse" : "row",
+                  }}
+                >
+                  {msg.role === "assistant" && (
+                    <div style={{ marginTop: 2 }}>
+                      <Orb size={22} glow={0.7} />
+                    </div>
+                  )}
+                  <div
+                    className={msg.role === "user" ? "bubble-u" : "bubble-h"}
+                    style={{ borderRadius: 14, padding: "10px 13px", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatBusy && (
+                <div style={{ display: "flex", gap: 10, alignSelf: "flex-start" }}>
+                  <div style={{ marginTop: 2 }}>
+                    <Orb size={22} glow={0.7} />
+                  </div>
+                  <div className="bubble-h" style={{ borderRadius: 14, padding: "10px 13px", fontSize: 13.5, color: "var(--muted)" }}>
+                    …
+                  </div>
+                </div>
+              )}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                border: "1px solid var(--borderS)",
+                borderRadius: 14,
+                padding: "8px 8px 8px 14px",
+                background: "rgba(255,255,255,.02)",
+              }}
+            >
+              <input
+                className="hinput"
+                style={{ border: "none", background: "transparent", padding: 0, flex: 1 }}
+                placeholder="Écris à ton agent…"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") sendChat();
+                }}
+                disabled={chatBusy}
+              />
+              <button
+                className="send-btn"
+                onClick={sendChat}
+                disabled={chatBusy || !chatInput.trim()}
+                style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                title="Envoyer"
+              >
+                <span style={{ color: "#2a0f1e", fontSize: 17, fontWeight: 700, lineHeight: 1 }}>↑</span>
+              </button>
+            </div>
+          </Card>
+
           {/* Briefing du jour */}
           <Card title="Briefing du jour">
             {props.briefing ? (
