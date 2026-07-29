@@ -2,17 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireEnv, ANTHROPIC_MODEL } from "./env";
 import type { CalEvent, EmailItem } from "./google";
 import type { Goal, HabitWithLogs, BriefingContent } from "./types";
-
 const SYSTEM = `Tu es l'assistant personnel de Dierry : entrepreneur (agence de com Instant-T, marque Maillot Addict), etudiant, et sportif. Il est organise, ambitieux et aime aller a l'essentiel.
-
 Ta mission : produire un briefing matinal court, motivant et actionnable, en francais, au tutoiement.
-
 Regles :
 - Sois concret et priorise. Pas de blabla.
 - Relie le plan de la journee aux rendez-vous reels et aux mails importants.
 - Rappelle ses objectifs sans le culpabiliser ; encourage ses habitudes.
 - Si l'agenda est vide, propose une structure de journee utile.
-
 Tu reponds UNIQUEMENT avec un objet JSON valide, sans texte autour ni backticks, suivant ce schema exact :
 {
   "greeting": "phrase d'accueil chaleureuse, 1 ligne",
@@ -22,7 +18,6 @@ Tu reponds UNIQUEMENT avec un objet JSON valide, sans texte autour ni backticks,
   "goalReminders": ["rappel court lie a un objectif"],
   "habitNudges": ["encouragement court sur une habitude"]
 }`;
-
 export async function generateBriefing(input: {
   events: CalEvent[];
   emails: EmailItem[];
@@ -32,7 +27,6 @@ export async function generateBriefing(input: {
   dateLabel: string;
 }): Promise<BriefingContent> {
   const client = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
-
   const payload = {
     date: input.dateLabel,
     fuseau: input.tz,
@@ -45,7 +39,6 @@ export async function generateBriefing(input: {
       jours_faits_sur_7: h.done_last_7,
     })),
   };
-
   const msg = await client.messages.create({
     model: ANTHROPIC_MODEL(),
     max_tokens: 1500,
@@ -61,19 +54,16 @@ export async function generateBriefing(input: {
       },
     ],
   });
-
   const text = (msg.content as Array<{ type: string; text?: string }>)
     .filter((b) => b.type === "text")
     .map((b) => b.text || "")
     .join("\n")
     .trim();
-
   const cleaned = text
     .replace(/^```json/i, "")
     .replace(/^```/, "")
     .replace(/```$/, "")
     .trim();
-
   try {
     const parsed = JSON.parse(cleaned) as BriefingContent;
     return {
@@ -96,4 +86,43 @@ export async function generateBriefing(input: {
       habitNudges: [],
     };
   }
+}
+
+// --- Brouillon de reponse a un mail (meme client / meme modele) ---
+const REPLY_SYSTEM = `Tu es l'assistant personnel de Dierry (entrepreneur, agence Instant-T et marque Maillot Addict). Tu rediges pour lui des brouillons de reponse a ses emails, en francais.
+Regles :
+- Reponds UNIQUEMENT avec le corps du message, sans objet, sans "Objet :", sans balises ni commentaire de ta part.
+- Ton clair, poli et concis. Adapte le niveau de formalite au mail recu (tutoiement si le ton est familier, vouvoiement si c'est professionnel).
+- Si des infos manquent pour repondre precisement, reste general et laisse a Dierry le soin de completer.
+- Termine par une signature simple : "Dierry".`;
+
+export async function draftEmailReply(input: {
+  from: string;
+  subject: string;
+  snippet: string;
+  instruction?: string;
+}): Promise<string> {
+  const client = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
+  const msg = await client.messages.create({
+    model: ANTHROPIC_MODEL(),
+    max_tokens: 800,
+    system: REPLY_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content:
+          `Redige un brouillon de reponse a ce mail.\n\n` +
+          `De : ${input.from}\n` +
+          `Objet : ${input.subject}\n` +
+          `Extrait recu : ${input.snippet}\n` +
+          (input.instruction ? `\nConsigne de Dierry : ${input.instruction}\n` : ""),
+      },
+    ],
+  });
+  const text = (msg.content as Array<{ type: string; text?: string }>)
+    .filter((b) => b.type === "text")
+    .map((b) => b.text || "")
+    .join("\n")
+    .trim();
+  return text || "Bonjour,\n\n\n\nDierry";
 }
