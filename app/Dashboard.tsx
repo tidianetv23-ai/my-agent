@@ -33,7 +33,6 @@ type Briefing = {
   created_at: string;
 } | null;
 
-// Nouveaux : agenda + mails du jour
 type CalEvent = { summary: string; start: string; end: string; location?: string };
 type EmailItem = { from: string; subject: string; snippet: string; date: string };
 
@@ -55,7 +54,6 @@ function greetingByHour(): string {
   return "Bonsoir";
 }
 
-// Heure d'un evenement ("09:00"), ou "Jour" pour un evenement toute la journee
 function fmtTime(iso: string): string {
   if (!iso) return "";
   if (!iso.includes("T")) return "Jour";
@@ -65,11 +63,38 @@ function fmtTime(iso: string): string {
     : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
-// Extrait le nom depuis un champ "Nom <email@x.com>"
 function fromName(s: string): string {
   const m = s.match(/^(.*?)\s*<.*>$/);
   const name = (m ? m[1] : s).replace(/^"|"$/g, "").trim();
   return name || s;
+}
+
+// --- Habitudes : dates (YYYY-MM-DD), grille et serie en cours ---
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function lastNDays(n: number, today: string): string[] {
+  const out: string[] = [];
+  const d = new Date(today + "T00:00:00");
+  for (let i = 0; i < n; i++) {
+    out.push(ymd(d));
+    d.setDate(d.getDate() - 1);
+  }
+  return out.reverse(); // du plus ancien au plus recent
+}
+function streakFromSet(set: Set<string>, today: string): number {
+  const d = new Date(today + "T00:00:00");
+  // Pas encore fait aujourd'hui : on part d'hier pour ne pas casser la serie
+  if (!set.has(ymd(d))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (set.has(ymd(d))) {
+    n++;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
 }
 
 // Le "halo" — signature visuelle de l'agent
@@ -228,7 +253,7 @@ export default function Dashboard(props: Props) {
         .halo-root .plan-ul{margin:4px 0 4px 20px;list-style:disc;}
         .halo-root .plan-ul li{margin:3px 0;color:var(--soft);}
         .halo-root .sub-h4{margin:12px 0 4px;font-weight:600;color:var(--text);}
-        .halo-root .toggle{height:24px;width:24px;border-radius:50%;border:1px solid var(--borderS);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;background:transparent;cursor:pointer;transition:all .15s ease;}
+        .halo-root .toggle{height:24px;width:24px;border-radius:50%;border:1px solid var(--borderS);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;background:transparent;cursor:pointer;transition:all .15s ease;flex-shrink:0;}
         .halo-root .toggle:hover:not(:disabled){border-color:#FF6FA5;}
         .halo-root .toggle-done{border-color:#6EE7D6;background:linear-gradient(180deg,#6EE7D6,#34C9B8);color:#06231f;box-shadow:0 0 12px rgba(110,231,214,.4);}
         .halo-root .row{border:1px solid var(--border);border-radius:12px;padding:10px 12px;}
@@ -519,33 +544,77 @@ export default function Dashboard(props: Props) {
             ) : (
               <ul className="space-y-2">
                 {props.habits.map((h) => {
-                  const doneToday = h.logged_days.includes(props.today);
+                  const logged = new Set(h.logged_days);
+                  const doneToday = logged.has(props.today);
+                  const streak = streakFromSet(logged, props.today);
+                  const days = lastNDays(14, props.today);
                   return (
-                    <li key={h.id} className="row flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => act(() => toggleHabit(h.id))}
-                          disabled={pending}
-                          className={"toggle" + (doneToday ? " toggle-done" : "")}
-                          aria-label="Marquer comme fait"
-                        >
-                          ✓
-                        </button>
-                        <div>
-                          <p style={{ fontWeight: 500, color: "var(--text)" }}>{h.name}</p>
-                          <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
-                            {h.cadence} · {h.done_last_7}/7 jours
-                          </p>
+                    <li key={h.id} className="row" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => act(() => toggleHabit(h.id))}
+                            disabled={pending}
+                            className={"toggle" + (doneToday ? " toggle-done" : "")}
+                            aria-label="Marquer comme fait"
+                          >
+                            ✓
+                          </button>
+                          <div>
+                            <p style={{ fontWeight: 500, color: "var(--text)" }}>{h.name}</p>
+                            <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
+                              {h.cadence} · {h.done_last_7}/7 j
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => act(() => removeHabit(h.id))}
+                          disabled={pending}
+                          className="del"
+                          aria-label="Supprimer"
+                        >
+                          Supprimer
+                        </button>
                       </div>
-                      <button
-                        onClick={() => act(() => removeHabit(h.id))}
-                        disabled={pending}
-                        className="del"
-                        aria-label="Supprimer"
+
+                      {/* Serie + grille des 14 derniers jours */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          rowGap: 6,
+                          flexWrap: "wrap",
+                          paddingLeft: 36,
+                        }}
                       >
-                        Supprimer
-                      </button>
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {days.map((day, i) => {
+                            const on = logged.has(day);
+                            return (
+                              <span
+                                key={i}
+                                title={day}
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 3,
+                                  background: on ? "linear-gradient(180deg,#6EE7D6,#34C9B8)" : "rgba(255,255,255,.05)",
+                                  border: on ? "none" : "1px solid var(--border)",
+                                  boxShadow: on ? "0 0 6px rgba(110,231,214,.35)" : "none",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                        <span
+                          className="mono"
+                          style={{ fontSize: 11, color: streak > 0 ? "var(--mint)" : "var(--muted)", whiteSpace: "nowrap" }}
+                        >
+                          {streak > 0 ? `série ${streak} j` : "aucune série"}
+                        </span>
+                      </div>
                     </li>
                   );
                 })}
