@@ -33,6 +33,10 @@ type Briefing = {
   created_at: string;
 } | null;
 
+// Nouveaux : agenda + mails du jour
+type CalEvent = { summary: string; start: string; end: string; location?: string };
+type EmailItem = { from: string; subject: string; snippet: string; date: string };
+
 type Props = {
   connected: boolean;
   goals: Goal[];
@@ -40,6 +44,8 @@ type Props = {
   briefing: Briefing;
   today: string;
   dbError: string | null;
+  events?: CalEvent[];
+  emails?: EmailItem[];
 };
 
 function greetingByHour(): string {
@@ -47,6 +53,23 @@ function greetingByHour(): string {
   if (h < 12) return "Bonjour";
   if (h < 18) return "Bon aprem";
   return "Bonsoir";
+}
+
+// Heure d'un evenement ("09:00"), ou "Jour" pour un evenement toute la journee
+function fmtTime(iso: string): string {
+  if (!iso) return "";
+  if (!iso.includes("T")) return "Jour";
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+// Extrait le nom depuis un champ "Nom <email@x.com>"
+function fromName(s: string): string {
+  const m = s.match(/^(.*?)\s*<.*>$/);
+  const name = (m ? m[1] : s).replace(/^"|"$/g, "").trim();
+  return name || s;
 }
 
 // Le "halo" — signature visuelle de l'agent
@@ -112,6 +135,9 @@ export default function Dashboard(props: Props) {
   const [goalDetail, setGoalDetail] = useState("");
   const [habitName, setHabitName] = useState("");
   const [habitCadence, setHabitCadence] = useState("quotidienne");
+
+  const events = props.events ?? [];
+  const emails = props.emails ?? [];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -210,7 +236,7 @@ export default function Dashboard(props: Props) {
       `}</style>
 
       <main className="mx-auto max-w-3xl px-4 py-8">
-        {/* En-tête */}
+        {/* En-tete */}
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Orb size={40} />
@@ -319,6 +345,87 @@ export default function Dashboard(props: Props) {
                 Pas encore de briefing. Connecte Google puis clique sur « Lancer le
                 briefing », ou attends le cron du matin.
               </p>
+            )}
+          </Card>
+
+          {/* Agenda du jour */}
+          <Card title="Agenda du jour">
+            {events.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>
+                {props.connected
+                  ? "Rien de prévu aujourd'hui."
+                  : "Connecte Google pour voir ton agenda."}
+              </p>
+            ) : (
+              <ul>
+                {events.map((e, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-3"
+                    style={{ padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
+                  >
+                    <span className="mono" style={{ fontSize: 13, color: "#FFB39C", width: 48, flexShrink: 0 }}>
+                      {fmtTime(e.start)}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 500, color: "var(--text)" }}>{e.summary}</p>
+                      {e.location && (
+                        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{e.location}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Mails a traiter */}
+          <Card title="Mails à traiter">
+            {emails.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>
+                {props.connected
+                  ? "Aucun mail important non lu."
+                  : "Connecte Google pour voir tes mails."}
+              </p>
+            ) : (
+              <ul>
+                {emails.map((m, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-3"
+                    style={{ padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
+                  >
+                    <span
+                      style={{
+                        marginTop: 7,
+                        flexShrink: 0,
+                        display: "block",
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: "#FF6FA5",
+                        boxShadow: "0 0 8px rgba(255,111,165,.7)",
+                      }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, color: "var(--muted)" }}>{fromName(m.from)}</p>
+                      <p style={{ fontWeight: 600, color: "var(--text)", margin: "1px 0 3px" }}>{m.subject}</p>
+                      <p
+                        style={{
+                          fontSize: 12.5,
+                          color: "var(--muted)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {m.snippet}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
 
