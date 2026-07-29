@@ -49,6 +49,16 @@ function greetingByHour(): string {
   return "Bonsoir";
 }
 
+// Le "halo" — signature visuelle de l'agent
+function Orb({ size = 40, glow = 1 }: { size?: number; glow?: number }) {
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <div className="halo-glow halo-glowpulse" style={{ position: "absolute", inset: -size * 0.4 * glow }} />
+      <div className="halo-orb halo-breathe" style={{ position: "absolute", inset: 0 }} />
+    </div>
+  );
+}
+
 function PlanText({ md }: { md: string }) {
   const lines = (md || "").split(/\r?\n/);
   const out: React.ReactNode[] = [];
@@ -56,7 +66,7 @@ function PlanText({ md }: { md: string }) {
   const flush = (key: string) => {
     if (bullets.length) {
       out.push(
-        <ul key={key} className="my-1 ml-5 list-disc space-y-1 text-gray-700">
+        <ul key={key} className="plan-ul">
           {bullets.map((b, i) => (
             <li key={i}>{b}</li>
           ))}
@@ -74,40 +84,19 @@ function PlanText({ md }: { md: string }) {
     flush(`ul-${idx}`);
     if (!t) return;
     if (t.startsWith("## "))
-      out.push(
-        <h4 key={idx} className="mt-3 mb-1 font-semibold text-gray-900">
-          {t.slice(3)}
-        </h4>
-      );
+      out.push(<h4 key={idx} className="plan-h4">{t.slice(3)}</h4>);
     else if (t.startsWith("# "))
-      out.push(
-        <h3 key={idx} className="mt-3 mb-1 text-lg font-semibold text-gray-900">
-          {t.slice(2)}
-        </h3>
-      );
-    else
-      out.push(
-        <p key={idx} className="my-1 leading-relaxed text-gray-700">
-          {t}
-        </p>
-      );
+      out.push(<h3 key={idx} className="plan-h3">{t.slice(2)}</h3>);
+    else out.push(<p key={idx} className="plan-p">{t}</p>);
   });
   flush("ul-end");
   return <div>{out}</div>;
 }
 
-function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white/80 p-5 shadow-sm backdrop-blur">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-        {title}
-      </h2>
+    <section className="panel" style={{ padding: 20 }}>
+      <h2 className="card-title">{title}</h2>
       {children}
     </section>
   );
@@ -127,8 +116,8 @@ export default function Dashboard(props: Props) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const g = params.get("google");
-    if (g === "connected") setNotice("Google connecte avec succes.");
-    else if (g === "denied") setNotice("Connexion Google refusee.");
+    if (g === "connected") setNotice("Google connecté avec succès.");
+    else if (g === "denied") setNotice("Connexion Google refusée.");
     else if (g === "error")
       setNotice(`Erreur Google : ${params.get("msg") || "inconnue"}`);
     if (g) window.history.replaceState({}, "", "/");
@@ -153,276 +142,315 @@ export default function Dashboard(props: Props) {
         const res = await runBriefingNow();
         setRunResult(
           res.emailedTo
-            ? `Briefing genere et envoye a ${res.emailedTo}.`
-            : "Briefing genere (email non envoye)."
+            ? `Briefing généré et envoyé à ${res.emailedTo}.`
+            : "Briefing généré (email non envoyé)."
         );
         router.refresh();
       } catch (e) {
         setRunResult(
-          e instanceof Error ? `Echec : ${e.message}` : "Echec du briefing."
+          e instanceof Error ? `Échec : ${e.message}` : "Échec du briefing."
         );
       }
     });
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
-      {/* En-tete */}
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-sun-600">
-            {greetingByHour()}, Dierry
-          </p>
-          <h1 className="text-2xl font-bold text-gray-900">Ton assistant</h1>
-        </div>
-        <button
-          onClick={handleRun}
-          disabled={pending || !props.connected}
-          className="rounded-xl bg-sun-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sun-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pending ? "..." : "Lancer le briefing"}
-        </button>
-      </header>
+    <div className="halo-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        .halo-root, .halo-root * { box-sizing: border-box; }
+        .halo-root {
+          --panel:rgba(255,255,255,.03); --panel2:rgba(255,255,255,.05);
+          --border:rgba(255,255,255,.08); --borderS:rgba(255,255,255,.15);
+          --text:#ECEEF5; --muted:#868D9E; --soft:#C7CBD6; --mint:#6EE7D6; --danger:#FF6B7A;
+          font-family:'Inter',system-ui,sans-serif; color:var(--text); min-height:100vh;
+          background:
+            radial-gradient(1100px 560px at 12% -12%, rgba(255,111,165,.11), transparent 60%),
+            radial-gradient(880px 480px at 102% -4%, rgba(155,107,255,.11), transparent 55%),
+            #090B11;
+        }
+        .halo-root .display{font-family:'Space Grotesk',system-ui,sans-serif;}
+        .halo-root .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+        .halo-root .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);}
+        .halo-orb{border-radius:50%;background:radial-gradient(circle at 32% 27%,#FFD9AE,#FF6FA5 47%,#9B6BFF 84%);box-shadow:inset 0 0 20px rgba(255,255,255,.4);}
+        .halo-glow{border-radius:50%;background:radial-gradient(circle,rgba(255,140,170,.6),rgba(155,107,255,.28) 55%,transparent 72%);filter:blur(24px);}
+        @keyframes halo-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+        @keyframes halo-glowpulse{0%,100%{opacity:.65;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+        .halo-breathe{animation:halo-breathe 5.5s ease-in-out infinite;}
+        .halo-glowpulse{animation:halo-glowpulse 5.5s ease-in-out infinite;}
+        .halo-root .panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;backdrop-filter:blur(12px);}
+        .halo-root .card-title{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+        .halo-root .btn-primary{font-family:'Inter',sans-serif;font-weight:600;font-size:13px;color:#2a0f1e;border:none;border-radius:12px;padding:9px 16px;cursor:pointer;background:linear-gradient(180deg,#FFD9AE,#FF8FB0);box-shadow:0 4px 18px rgba(255,111,165,.3);transition:transform .15s ease,opacity .15s ease;}
+        .halo-root .btn-primary:hover:not(:disabled){transform:translateY(-1px);}
+        .halo-root .btn-primary:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+        .halo-root .btn-dark{font-family:'Inter',sans-serif;font-weight:600;font-size:13px;color:var(--text);border:1px solid var(--borderS);border-radius:10px;padding:9px 16px;cursor:pointer;background:rgba(255,255,255,.04);transition:all .15s ease;white-space:nowrap;}
+        .halo-root .btn-dark:hover:not(:disabled){background:var(--panel2);border-color:rgba(255,255,255,.25);}
+        .halo-root .btn-dark:disabled{opacity:.4;cursor:not-allowed;}
+        .halo-root .hinput,.halo-root .hselect{font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:9px 12px;outline:none;transition:border-color .15s ease;}
+        .halo-root .hinput::placeholder{color:var(--muted);}
+        .halo-root .hinput:focus,.halo-root .hselect:focus{border-color:#FF6FA5;}
+        .halo-root .hselect option{background:#12151d;color:var(--text);}
+        .halo-root .del{font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);background:none;border:none;cursor:pointer;transition:color .15s ease;}
+        .halo-root .del:hover:not(:disabled){color:var(--danger);}
+        .halo-root .focus-box{border-left:3px solid #FF6FA5;background:linear-gradient(90deg,rgba(255,111,165,.12),transparent);border-radius:8px;padding:10px 14px;margin:12px 0;}
+        .halo-root .notice{border-radius:12px;padding:11px 14px;font-size:13px;margin-bottom:14px;border:1px solid var(--border);background:var(--panel2);color:var(--soft);}
+        .halo-root .notice-accent{border-color:rgba(255,111,165,.3);background:rgba(255,111,165,.08);color:#FFC2D6;}
+        .halo-root .notice-danger{border-color:rgba(255,107,122,.3);background:rgba(255,107,122,.08);color:#FFB3BB;}
+        .halo-root .plan-p{margin:4px 0;line-height:1.6;color:var(--soft);}
+        .halo-root .plan-h4{margin:12px 0 4px;font-weight:600;color:var(--text);}
+        .halo-root .plan-h3{margin:12px 0 4px;font-size:17px;font-weight:600;color:var(--text);}
+        .halo-root .plan-ul{margin:4px 0 4px 20px;list-style:disc;}
+        .halo-root .plan-ul li{margin:3px 0;color:var(--soft);}
+        .halo-root .sub-h4{margin:12px 0 4px;font-weight:600;color:var(--text);}
+        .halo-root .toggle{height:24px;width:24px;border-radius:50%;border:1px solid var(--borderS);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;background:transparent;cursor:pointer;transition:all .15s ease;}
+        .halo-root .toggle:hover:not(:disabled){border-color:#FF6FA5;}
+        .halo-root .toggle-done{border-color:#6EE7D6;background:linear-gradient(180deg,#6EE7D6,#34C9B8);color:#06231f;box-shadow:0 0 12px rgba(110,231,214,.4);}
+        .halo-root .row{border:1px solid var(--border);border-radius:12px;padding:10px 12px;}
+        @media (prefers-reduced-motion: reduce){.halo-breathe,.halo-glowpulse{animation:none!important;}}
+      `}</style>
 
-      {notice && (
-        <div className="mb-4 rounded-xl border border-sun-100 bg-sun-50 px-4 py-3 text-sm text-sun-600">
-          {notice}
-        </div>
-      )}
-      {runResult && (
-        <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-          {runResult}
-        </div>
-      )}
-      {props.dbError && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <strong>Base de donnees inaccessible.</strong> Verifie tes variables
-          SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY et que le schema SQL a bien
-          ete execute. Detail : {props.dbError}
-        </div>
-      )}
-
-      {/* Connexion Google */}
-      {!props.connected && (
-        <div className="mb-6 rounded-2xl border border-sun-200 bg-sun-50 p-5">
-          <h2 className="font-semibold text-gray-900">Connecte ton Google</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Autorise l&apos;acces a Gmail et a ton agenda pour que l&apos;agent
-            puisse lire ta journee et t&apos;envoyer ton briefing.
-          </p>
-          <a
-            href="/api/auth/google"
-            className="mt-3 inline-block rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
-          >
-            Connecter Google
-          </a>
-        </div>
-      )}
-
-      <div className="space-y-5">
-        {/* Briefing du jour */}
-        <Card title="Briefing du jour">
-          {props.briefing ? (
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        {/* En-tête */}
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Orb size={40} />
             <div>
-              <p className="mb-1 text-xs text-gray-400">
-                {props.briefing.date_label}
-              </p>
-              <p className="text-gray-800">{props.briefing.content.greeting}</p>
-              {props.briefing.content.focus && (
-                <div className="my-3 rounded-xl border-l-4 border-sun-500 bg-sun-50 px-4 py-2">
-                  <span className="text-xs uppercase tracking-wide text-sun-600">
-                    Focus du jour
-                  </span>
-                  <p className="text-gray-900">{props.briefing.content.focus}</p>
-                </div>
-              )}
-              <PlanText md={props.briefing.content.plan} />
-
-              {props.briefing.content.priorities?.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="mb-1 font-semibold text-gray-900">A traiter</h4>
-                  <ul className="ml-5 list-disc space-y-1 text-gray-700">
-                    {props.briefing.content.priorities.map((p, i) => (
-                      <li key={i}>
-                        <strong>{p.title}</strong>
-                        {p.why ? ` — ${p.why}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {props.briefing.content.goalReminders?.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="mb-1 font-semibold text-gray-900">
-                    Tes objectifs
-                  </h4>
-                  <ul className="ml-5 list-disc space-y-1 text-gray-700">
-                    {props.briefing.content.goalReminders.map((r, i) => (
-                      <li key={i}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {props.briefing.content.habitNudges?.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="mb-1 font-semibold text-gray-900">
-                    Tes habitudes
-                  </h4>
-                  <ul className="ml-5 list-disc space-y-1 text-gray-700">
-                    {props.briefing.content.habitNudges.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <p className="eyebrow">{greetingByHour()}, Dierry</p>
+              <h1 className="display" style={{ fontSize: 26, fontWeight: 600, margin: "2px 0 0" }}>
+                Ton assistant
+              </h1>
             </div>
-          ) : (
-            <p className="text-sm text-gray-500">
-              Pas encore de briefing. Connecte Google puis clique sur « Lancer le
-              briefing », ou attends le cron du matin.
+          </div>
+          <button onClick={handleRun} disabled={pending || !props.connected} className="btn-primary">
+            {pending ? "..." : "Lancer le briefing"}
+          </button>
+        </header>
+
+        {notice && <div className="notice notice-accent">{notice}</div>}
+        {runResult && <div className="notice">{runResult}</div>}
+        {props.dbError && (
+          <div className="notice notice-danger">
+            <strong>Base de données inaccessible.</strong> Vérifie tes variables
+            SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY et que le schéma SQL a bien été
+            exécuté. Détail : {props.dbError}
+          </div>
+        )}
+
+        {/* Connexion Google */}
+        {!props.connected && (
+          <div className="panel" style={{ padding: 20, marginBottom: 24 }}>
+            <div className="flex items-center gap-3" style={{ marginBottom: 6 }}>
+              <Orb size={28} />
+              <h2 className="display" style={{ fontSize: 17, fontWeight: 600 }}>
+                Connecte ton Google
+              </h2>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+              Autorise l&apos;accès à Gmail et à ton agenda pour que l&apos;agent puisse
+              lire ta journée et t&apos;envoyer ton briefing.
             </p>
-          )}
-        </Card>
-
-        {/* Objectifs */}
-        <Card title="Objectifs">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-            <input
-              value={goalTitle}
-              onChange={(e) => setGoalTitle(e.target.value)}
-              placeholder="Nouvel objectif"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-sun-500"
-            />
-            <input
-              value={goalDetail}
-              onChange={(e) => setGoalDetail(e.target.value)}
-              placeholder="Detail (optionnel)"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-sun-500"
-            />
-            <button
-              onClick={() =>
-                act(() => createGoal(goalTitle, goalDetail), () => {
-                  setGoalTitle("");
-                  setGoalDetail("");
-                })
-              }
-              disabled={pending}
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50"
+            <a
+              href="/api/auth/google"
+              className="btn-primary"
+              style={{ display: "inline-block", marginTop: 14, textDecoration: "none" }}
             >
-              Ajouter
-            </button>
+              Connecter Google
+            </a>
           </div>
-          {props.goals.length === 0 ? (
-            <p className="text-sm text-gray-500">Aucun objectif pour l&apos;instant.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {props.goals.map((g) => (
-                <li
-                  key={g.id}
-                  className="flex items-start justify-between gap-3 py-2"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{g.title}</p>
-                    {g.detail && (
-                      <p className="text-sm text-gray-500">{g.detail}</p>
-                    )}
+        )}
+
+        <div className="space-y-5">
+          {/* Briefing du jour */}
+          <Card title="Briefing du jour">
+            {props.briefing ? (
+              <div>
+                <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>
+                  {props.briefing.date_label}
+                </p>
+                <p style={{ color: "var(--text)" }}>{props.briefing.content.greeting}</p>
+                {props.briefing.content.focus && (
+                  <div className="focus-box">
+                    <span className="eyebrow" style={{ color: "#FF9FBE" }}>Focus du jour</span>
+                    <p style={{ color: "var(--text)", marginTop: 4 }}>
+                      {props.briefing.content.focus}
+                    </p>
                   </div>
-                  <button
-                    onClick={() => act(() => removeGoal(g.id))}
-                    disabled={pending}
-                    className="text-sm text-gray-400 transition hover:text-red-600"
-                    aria-label="Supprimer"
-                  >
-                    Supprimer
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+                )}
+                <PlanText md={props.briefing.content.plan} />
 
-        {/* Habitudes */}
-        <Card title="Habitudes">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-            <input
-              value={habitName}
-              onChange={(e) => setHabitName(e.target.value)}
-              placeholder="Nouvelle habitude (ex: sport, lecture)"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-sun-500"
-            />
-            <select
-              value={habitCadence}
-              onChange={(e) => setHabitCadence(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-sun-500"
-            >
-              <option value="quotidienne">Quotidienne</option>
-              <option value="hebdomadaire">Hebdomadaire</option>
-            </select>
-            <button
-              onClick={() =>
-                act(() => createHabit(habitName, habitCadence), () =>
-                  setHabitName("")
-                )
-              }
-              disabled={pending}
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50"
-            >
-              Ajouter
-            </button>
-          </div>
-          {props.habits.length === 0 ? (
-            <p className="text-sm text-gray-500">Aucune habitude suivie.</p>
-          ) : (
-            <ul className="space-y-2">
-              {props.habits.map((h) => {
-                const doneToday = h.logged_days.includes(props.today);
-                return (
+                {props.briefing.content.priorities?.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <h4 className="sub-h4">À traiter</h4>
+                    <ul className="plan-ul">
+                      {props.briefing.content.priorities.map((p, i) => (
+                        <li key={i}>
+                          <strong>{p.title}</strong>
+                          {p.why ? ` — ${p.why}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {props.briefing.content.goalReminders?.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <h4 className="sub-h4">Tes objectifs</h4>
+                    <ul className="plan-ul">
+                      {props.briefing.content.goalReminders.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {props.briefing.content.habitNudges?.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <h4 className="sub-h4">Tes habitudes</h4>
+                    <ul className="plan-ul">
+                      {props.briefing.content.habitNudges.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>
+                Pas encore de briefing. Connecte Google puis clique sur « Lancer le
+                briefing », ou attends le cron du matin.
+              </p>
+            )}
+          </Card>
+
+          {/* Objectifs */}
+          <Card title="Objectifs">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                value={goalTitle}
+                onChange={(e) => setGoalTitle(e.target.value)}
+                placeholder="Nouvel objectif"
+                className="hinput flex-1"
+              />
+              <input
+                value={goalDetail}
+                onChange={(e) => setGoalDetail(e.target.value)}
+                placeholder="Détail (optionnel)"
+                className="hinput flex-1"
+              />
+              <button
+                onClick={() =>
+                  act(() => createGoal(goalTitle, goalDetail), () => {
+                    setGoalTitle("");
+                    setGoalDetail("");
+                  })
+                }
+                disabled={pending}
+                className="btn-dark"
+              >
+                Ajouter
+              </button>
+            </div>
+            {props.goals.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>
+                Aucun objectif pour l&apos;instant.
+              </p>
+            ) : (
+              <ul>
+                {props.goals.map((g, i) => (
                   <li
-                    key={h.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2"
+                    key={g.id}
+                    className="flex items-start justify-between gap-3"
+                    style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
                   >
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => act(() => toggleHabit(h.id))}
-                        disabled={pending}
-                        className={
-                          "flex h-6 w-6 items-center justify-center rounded-full border text-xs transition " +
-                          (doneToday
-                            ? "border-sun-500 bg-sun-500 text-white"
-                            : "border-gray-300 text-transparent hover:border-sun-500")
-                        }
-                        aria-label="Marquer comme fait"
-                      >
-                        ✓
-                      </button>
-                      <div>
-                        <p className="font-medium text-gray-900">{h.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {h.cadence} · {h.done_last_7}/7 jours
-                        </p>
-                      </div>
+                    <div>
+                      <p style={{ fontWeight: 500, color: "var(--text)" }}>{g.title}</p>
+                      {g.detail && (
+                        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 1 }}>{g.detail}</p>
+                      )}
                     </div>
                     <button
-                      onClick={() => act(() => removeHabit(h.id))}
+                      onClick={() => act(() => removeGoal(g.id))}
                       disabled={pending}
-                      className="text-sm text-gray-400 transition hover:text-red-600"
+                      className="del"
                       aria-label="Supprimer"
                     >
                       Supprimer
                     </button>
                   </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      </div>
+                ))}
+              </ul>
+            )}
+          </Card>
 
-      <footer className="mt-8 text-center text-xs text-gray-400">
-        Assistant autonome · briefing quotidien automatique
-      </footer>
-    </main>
+          {/* Habitudes */}
+          <Card title="Habitudes">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                value={habitName}
+                onChange={(e) => setHabitName(e.target.value)}
+                placeholder="Nouvelle habitude (ex: sport, lecture)"
+                className="hinput flex-1"
+              />
+              <select
+                value={habitCadence}
+                onChange={(e) => setHabitCadence(e.target.value)}
+                className="hselect"
+              >
+                <option value="quotidienne">Quotidienne</option>
+                <option value="hebdomadaire">Hebdomadaire</option>
+              </select>
+              <button
+                onClick={() => act(() => createHabit(habitName, habitCadence), () => setHabitName(""))}
+                disabled={pending}
+                className="btn-dark"
+              >
+                Ajouter
+              </button>
+            </div>
+            {props.habits.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>Aucune habitude suivie.</p>
+            ) : (
+              <ul className="space-y-2">
+                {props.habits.map((h) => {
+                  const doneToday = h.logged_days.includes(props.today);
+                  return (
+                    <li key={h.id} className="row flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => act(() => toggleHabit(h.id))}
+                          disabled={pending}
+                          className={"toggle" + (doneToday ? " toggle-done" : "")}
+                          aria-label="Marquer comme fait"
+                        >
+                          ✓
+                        </button>
+                        <div>
+                          <p style={{ fontWeight: 500, color: "var(--text)" }}>{h.name}</p>
+                          <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
+                            {h.cadence} · {h.done_last_7}/7 jours
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => act(() => removeHabit(h.id))}
+                        disabled={pending}
+                        className="del"
+                        aria-label="Supprimer"
+                      >
+                        Supprimer
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <footer className="mt-8 text-center" style={{ fontSize: 11, color: "var(--muted)" }}>
+          Assistant autonome · briefing quotidien automatique
+        </footer>
+      </main>
+    </div>
   );
 }
