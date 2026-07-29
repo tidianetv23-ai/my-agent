@@ -9,6 +9,8 @@ import {
   removeHabit,
   toggleHabit,
   runBriefingNow,
+  draftReply,
+  sendReply,
 } from "./actions";
 
 type Goal = { id: number; title: string; detail: string | null };
@@ -83,11 +85,10 @@ function lastNDays(n: number, today: string): string[] {
     out.push(ymd(d));
     d.setDate(d.getDate() - 1);
   }
-  return out.reverse(); // du plus ancien au plus recent
+  return out.reverse();
 }
 function streakFromSet(set: Set<string>, today: string): number {
   const d = new Date(today + "T00:00:00");
-  // Pas encore fait aujourd'hui : on part d'hier pour ne pas casser la serie
   if (!set.has(ymd(d))) d.setDate(d.getDate() - 1);
   let n = 0;
   while (set.has(ymd(d))) {
@@ -97,7 +98,6 @@ function streakFromSet(set: Set<string>, today: string): number {
   return n;
 }
 
-// Le "halo" — signature visuelle de l'agent
 function Orb({ size = 40, glow = 1 }: { size?: number; glow?: number }) {
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
@@ -161,6 +161,13 @@ export default function Dashboard(props: Props) {
   const [habitName, setHabitName] = useState("");
   const [habitCadence, setHabitCadence] = useState("quotidienne");
 
+  // Reponse aux mails
+  const [replyIndex, setReplyIndex] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [replyNotice, setReplyNotice] = useState<string | null>(null);
+
   const events = props.events ?? [];
   const emails = props.emails ?? [];
 
@@ -205,6 +212,38 @@ export default function Dashboard(props: Props) {
     });
   }
 
+  async function startDraft(i: number, m: EmailItem) {
+    setReplyNotice(null);
+    setReplyIndex(i);
+    setDraft("");
+    setDrafting(true);
+    try {
+      const text = await draftReply({ from: m.from, subject: m.subject, snippet: m.snippet });
+      setDraft(text);
+    } catch (e) {
+      setReplyIndex(null);
+      setReplyNotice(e instanceof Error ? e.message : "Impossible de générer le brouillon.");
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  async function submitReply(m: EmailItem) {
+    if (!draft.trim()) return;
+    setSending(true);
+    setReplyNotice(null);
+    try {
+      const res = await sendReply(m.from, m.subject, draft);
+      setReplyNotice(`Réponse envoyée à ${res.to}.`);
+      setReplyIndex(null);
+      setDraft("");
+    } catch (e) {
+      setReplyNotice(e instanceof Error ? e.message : "Échec de l'envoi.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="halo-root">
       <style>{`
@@ -237,10 +276,11 @@ export default function Dashboard(props: Props) {
         .halo-root .btn-dark{font-family:'Inter',sans-serif;font-weight:600;font-size:13px;color:var(--text);border:1px solid var(--borderS);border-radius:10px;padding:9px 16px;cursor:pointer;background:rgba(255,255,255,.04);transition:all .15s ease;white-space:nowrap;}
         .halo-root .btn-dark:hover:not(:disabled){background:var(--panel2);border-color:rgba(255,255,255,.25);}
         .halo-root .btn-dark:disabled{opacity:.4;cursor:not-allowed;}
-        .halo-root .hinput,.halo-root .hselect{font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:9px 12px;outline:none;transition:border-color .15s ease;}
-        .halo-root .hinput::placeholder{color:var(--muted);}
-        .halo-root .hinput:focus,.halo-root .hselect:focus{border-color:#FF6FA5;}
+        .halo-root .hinput,.halo-root .hselect,.halo-root .htext{font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:9px 12px;outline:none;transition:border-color .15s ease;}
+        .halo-root .hinput::placeholder,.halo-root .htext::placeholder{color:var(--muted);}
+        .halo-root .hinput:focus,.halo-root .hselect:focus,.halo-root .htext:focus{border-color:#FF6FA5;}
         .halo-root .hselect option{background:#12151d;color:var(--text);}
+        .halo-root .htext{width:100%;min-height:130px;resize:vertical;line-height:1.5;}
         .halo-root .del{font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);background:none;border:none;cursor:pointer;transition:color .15s ease;}
         .halo-root .del:hover:not(:disabled){color:var(--danger);}
         .halo-root .focus-box{border-left:3px solid #FF6FA5;background:linear-gradient(90deg,rgba(255,111,165,.12),transparent);border-radius:8px;padding:10px 14px;margin:12px 0;}
@@ -257,6 +297,9 @@ export default function Dashboard(props: Props) {
         .halo-root .toggle:hover:not(:disabled){border-color:#FF6FA5;}
         .halo-root .toggle-done{border-color:#6EE7D6;background:linear-gradient(180deg,#6EE7D6,#34C9B8);color:#06231f;box-shadow:0 0 12px rgba(110,231,214,.4);}
         .halo-root .row{border:1px solid var(--border);border-radius:12px;padding:10px 12px;}
+        .halo-root .btn-mini{font-family:'Inter',sans-serif;font-weight:600;font-size:12px;color:var(--text);border:1px solid var(--borderS);border-radius:9px;padding:6px 11px;cursor:pointer;background:rgba(255,255,255,.04);transition:all .15s ease;}
+        .halo-root .btn-mini:hover:not(:disabled){background:var(--panel2);border-color:rgba(255,255,255,.25);}
+        .halo-root .btn-mini:disabled{opacity:.4;cursor:not-allowed;}
         @media (prefers-reduced-motion: reduce){.halo-breathe,.halo-glowpulse{animation:none!important;}}
       `}</style>
 
@@ -406,6 +449,7 @@ export default function Dashboard(props: Props) {
 
           {/* Mails a traiter */}
           <Card title="Mails à traiter">
+            {replyNotice && <div className="notice notice-accent">{replyNotice}</div>}
             {emails.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--muted)" }}>
                 {props.connected
@@ -418,7 +462,7 @@ export default function Dashboard(props: Props) {
                   <li
                     key={i}
                     className="flex items-start gap-3"
-                    style={{ padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
+                    style={{ padding: "11px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
                   >
                     <span
                       style={{
@@ -447,6 +491,52 @@ export default function Dashboard(props: Props) {
                       >
                         {m.snippet}
                       </p>
+
+                      {replyIndex === i ? (
+                        <div style={{ marginTop: 10 }}>
+                          {drafting ? (
+                            <p className="mono" style={{ fontSize: 12, color: "var(--mint)" }}>
+                              Rédaction du brouillon…
+                            </p>
+                          ) : (
+                            <>
+                              <textarea
+                                className="htext"
+                                value={draft}
+                                onChange={(e) => setDraft(e.target.value)}
+                              />
+                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <button
+                                  className="btn-primary"
+                                  disabled={sending || !draft.trim()}
+                                  onClick={() => submitReply(m)}
+                                >
+                                  {sending ? "Envoi…" : "Envoyer"}
+                                </button>
+                                <button
+                                  className="btn-dark"
+                                  disabled={sending}
+                                  onClick={() => {
+                                    setReplyIndex(null);
+                                    setDraft("");
+                                  }}
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          className="btn-mini"
+                          style={{ marginTop: 8 }}
+                          disabled={!props.connected}
+                          onClick={() => startDraft(i, m)}
+                        >
+                          Préparer une réponse
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -577,7 +667,6 @@ export default function Dashboard(props: Props) {
                         </button>
                       </div>
 
-                      {/* Serie + grille des 14 derniers jours */}
                       <div
                         style={{
                           display: "flex",
