@@ -21,7 +21,7 @@ export function oauthClient(redirectUri?: string): GoogleAuth {
 export function getAuthUrl(redirectUri: string): string {
   return oauthClient(redirectUri).generateAuthUrl({
     access_type: "offline",
-    prompt: "consent", // force la delivrance d'un refresh_token
+    prompt: "consent select_account", // force la delivrance d'un refresh_token
     scope: GOOGLE_SCOPES,
   });
 }
